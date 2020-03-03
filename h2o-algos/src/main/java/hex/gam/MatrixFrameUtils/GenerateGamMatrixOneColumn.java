@@ -46,7 +46,7 @@ public class GenerateGamMatrixOneColumn extends MRTask<GenerateGamMatrixOneColum
   public void map(Chunk[] chk, NewChunk[] newGamCols) {
     _u = new double[_numKnots];
     int chunkRows = chk[0].len(); // number of rows in chunk
-    CubicRegressionSplines crSplines = new CubicRegressionSplines(_numKnots, null, _gamX.vec(0).max(), 
+    CubicRegressionSplines crSplines = new CubicRegressionSplines(_numKnots, _knots, _gamX.vec(0).max(), 
             _gamX.vec(0).min());
     double[] basisVals = new double[_numKnots];
     for (int rowIndex=0; rowIndex < chunkRows; rowIndex++) {
@@ -117,7 +117,7 @@ public class GenerateGamMatrixOneColumn extends MRTask<GenerateGamMatrixOneColum
     }
   }
   
-  public Frame de_centralize_frame(Frame fr, String colNameStart, GAMParameters parms) {
+  public Frame deCentralizeFrame(Frame fr, String colNameStart, GAMParameters parms) {
     int numCols = fr.numCols();
     int ncolExp = numCols-1;
     DataInfo frInfo = new DataInfo(fr, null, 0, false,  DataInfo.TransformType.NONE, DataInfo.TransformType.NONE,

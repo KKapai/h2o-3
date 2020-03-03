@@ -25,7 +25,7 @@ public class CubicRegressionSplines {
         _knots[index] = _knots[index-1]+incre;
       }
     }
-    _hj = setHj(_knots);
+    _hj = ArrayUtils.eleDiff(_knots);
   }
   
   public double[][] gen_BIndvD(double[] hj) {  // generate matrix bInvD
@@ -46,14 +46,6 @@ public class CubicRegressionSplines {
     return LinearAlgebraUtils.matrixMultiplyTriagonal(ArrayUtils.transpose(binvD), matrixD, false);
   }
   
-  public static double[] setHj(double[] knots) {
-    int numHj = knots.length-1;
-    double[] hj = MemoryManager.malloc8d(numHj);
-    for (int index = 0; index < numHj; index++)
-      hj[index] = knots[index+1]-knots[index];  // expect it to be uniform in length though
-    return hj;
-  }
-  
   public static double gen_a_m_j(double xjp1, double x, double hj) {
     return (xjp1-x)/hj;
   }
@@ -65,12 +57,12 @@ public class CubicRegressionSplines {
   public static double gen_c_m_j(double xjp1, double x, double hj) {
     double t = (xjp1-x);
     double t3 = t*t*t;
-    return ((t3/hj-hj*(xjp1-x))/6.0);
+    return ((t3/hj-t*hj)/6.0);
   }
 
   public static double gen_c_p_j(double xj, double x, double hj) {
     double t=(x-xj);
     double t3 = t*t*t;
-    return ((t3/hj-hj*(x-xj))/6.0);
+    return ((t3/hj-t*hj)/6.0);
   }
 }

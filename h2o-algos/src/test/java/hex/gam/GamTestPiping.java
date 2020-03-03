@@ -18,57 +18,87 @@ public class GamTestPiping extends TestUtil {
   public static void setup() {
     stall_till_cloudsize(1);
   }
-  
+
+  /**
+   * This test is to make sure that we carried out the expansion of a gam column to basis functions
+   * correctly.  I will compare the following:
+   * 1. binvD generation;
+   * 2. model matrix that contains the basis function value for each role of the gam column
+   * 
+   * I compared my results with the ones generated from R mgcv library.
+   * 
+   */
   @Test
-  public void testAdaptFrame() {
+  public void testGamTransformNoCenter() {
     try {
       Scope.enter();
-      Frame train = parse_test_file("./smalldata/gam_test/gamDataRegressionOneFun.csv");
-      Scope.track(train);
-      Frame trainCorrectOutput = parse_test_file("./smalldata/gam_test/gamDataRModelMatrixCenterDataOneFun.csv");
-      Scope.track(trainCorrectOutput);
-      int numKnots = 6;
-      double hj = (train.vec(1).max()-train.vec(1).min())/(numKnots-1);
-      double oneOhj = 1.0/hj;
-      double[][] matD = new double[numKnots-2][];
-      matD[0] = new double[]{oneOhj, -2*oneOhj, oneOhj, 0, 0, 0};
-      matD[1] = new double[]{0, oneOhj, -2*oneOhj, oneOhj, 0, 0};
-      matD[2] = new double[]{0, 0, oneOhj, -2*oneOhj, oneOhj, 0};
-      matD[3] = new double[]{0, 0, 0, oneOhj, -2*oneOhj, oneOhj};
-      double[][] matB = new double[numKnots-2][];
-      matB[0] = new double[]{2*hj/3, hj/6, 0, 0};
-      matB[1] = new double[]{hj/6, 2*hj/3, hj/6,0};
-      matB[2] = new double[]{0, hj/6, 2*hj/3, hj/6};
-      matB[3] = new double[]{0, 0, hj/6, 2*hj/3};
-      double[][] bInvD = new double[numKnots-2][];
-      bInvD[0] = new double[]{4.019621461444700e+01, -9.115927242919231e+01, 6.460105920178982e+01, 
-              -1.722694912047729e+01, 4.306737280119322e+00, -7.177895466865537e-01};
-      bInvD[1] = new double[]{-1.076684320029831e+01, 6.460105920178982e+01, -1.083862215496696e+02, 
-              6.890779648190914e+01, -1.722694912047729e+01, 2.871158186746215e+00};
-      bInvD[2] = new double[]{2.871158186746215e+00, -1.722694912047729e+01,  6.890779648190914e+01,
-              -1.083862215496696e+02, 6.460105920178982e+01, -1.076684320029830e+01};
-      bInvD[3] = new double[]{-7.177895466865537e-01, 4.306737280119322e+00, -1.722694912047729e+01,
-              6.460105920178982e+01, -9.115927242919230e+01, 4.019621461444699e+01};
-/*      Frame predictVec = new Frame(train.vec(1));
-      GenerateGamMatrixOneColumn oneAugCol = new GenerateGamMatrixOneColumn(BSType.cr, numKnots, null, predictVec,
-              false).doAll(numKnots, Vec.T_NUM, predictVec);
-      Frame oneAugmentedColumn = oneAugCol.outputFrame(null, null, null);*/
-      
-      GAMModel.GAMParameters parms = new GAMModel.GAMParameters();
-      parms._bs = new BSType[]{BSType.cr};
-      parms._k = new int[]{6};
-      parms._response_column = train.name(2);
-      parms._ignored_columns = new String[]{train.name(0), train.name(1)}; // row of ids
-      parms._gam_X = new String[]{train.name(1)};
-      parms._train = train._key;
-      parms._family = GLMModel.GLMParameters.Family.gaussian;
-      parms._link = GLMModel.GLMParameters.Link.family_default;
-
-      GAMModel model = new GAM(parms).trainModel().get();
+      // test for multinomial
+      String[] ignoredCols = new String[]{"C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10"};
+      String[] gamCols = new String[]{"C6"};
+      double[][] knots = new double[1][];
+      knots[0] = new double[]{-1.99905699, -0.98143075, 0.02599159, 1.00770987, 1.99942290};
+      GAMModel model = getModel(GLMModel.GLMParameters.Family.multinomial,
+              "smalldata/glm_test/multinomial_10_classes_10_cols_10000_Rows_train.csv", "C11",
+              gamCols, ignoredCols, new int[]{5}, new BSType[]{BSType.cr}, false, true, knots);  // do not save Z mat
       Scope.track_generic(model);
+      double[][] rBinvD = new double[][]{{1.5605080,
+              -3.5620961,  2.5465468, -0.6524143,  0.1074557}, {-0.4210098,  2.5559955, -4.3258597,  2.6228736,
+              -0.4319995},  {0.1047194, -0.6357626,  2.6244918, -3.7337994,  1.6403508}};
+      
+      TestUtil.checkDoubleArrays(model._output._binvD[0], rBinvD, 1e-6); // compare binvD generation
+      
+      Frame transformedData =  ((Frame) DKV.getGet(model._output._gamTransformedTrain));  // compare gam columns
+      Scope.track(transformedData);
+      Scope.track(transformedData.remove("C11"));
+      Frame rTransformedData =  parse_test_file("smalldata/gam_test/multinomial_10_classes_10_cols_10000_Rows_train_C6Gam.csv");
+      Scope.track(rTransformedData);
+      TestUtil.assertIdenticalUpToRelTolerance(transformedData, rTransformedData, 1e-4);
     } finally {
       Scope.exit();
     }
+  }
+
+  public GAMModel getModel(GLMModel.GLMParameters.Family family, String fileName, String responseColumn,
+                         String[] gamCols, String[] ignoredCols, int[] numKnots, BSType[] bstypes, boolean saveZmat,
+                           boolean savePenalty, double[][] knots) {
+    GAMModel gam=null;
+    try {
+      Scope.enter();
+      Frame train = parse_test_file(fileName);
+      // set cat columns
+      int numCols = train.numCols();
+      int enumCols = (numCols-1)/2;
+      for (int cindex=0; cindex<enumCols; cindex++) {
+        train.replace(cindex, train.vec(cindex).toCategoricalVec()).remove();
+      }
+      int response_index = numCols-1;
+      if (family.equals(GLMModel.GLMParameters.Family.binomial) || (family.equals(GLMModel.GLMParameters.Family.multinomial))) {
+        train.replace((response_index), train.vec(response_index).toCategoricalVec()).remove();
+      }
+      DKV.put(train);
+      Scope.track(train);
+
+      GAMModel.GAMParameters params = new GAMModel.GAMParameters();
+      params._standardize=false;
+      params._family = family;
+      params._response_column = responseColumn;
+      params._train = train._key;
+      params._bs = bstypes;
+      params._k = numKnots;
+      params._ignored_columns = ignoredCols;
+      params._gam_X = gamCols;
+      params._train = train._key;
+      params._family = family;
+      params._knots = knots;
+      params._link = GLMModel.GLMParameters.Link.family_default;
+      params._saveZMatrix = saveZmat;
+      params._saveGamCols = true;
+      params._savePenaltyMat = savePenalty;
+      gam = new GAM(params).trainModel().get();
+    } finally {
+      Scope.exit();
+    }
+    return gam;
   }
 
   @Test

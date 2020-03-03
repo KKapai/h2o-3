@@ -25,6 +25,10 @@ public class TriDiagonalMatrix {
     _size = tdiag.length;
   }
 
+  /***
+   * Implement the generation of D matrix.  Refer to doc 6.1
+   * @param hj
+   */
   public TriDiagonalMatrix(double[] hj) {
     this(hj.length-1);  // hj size k-1
     int diagSize = _size;

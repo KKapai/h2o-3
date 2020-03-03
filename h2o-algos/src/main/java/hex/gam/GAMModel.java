@@ -90,6 +90,7 @@ public class GAMModel extends Model<GAMModel, GAMModel.GAMParameters, GAMModel.G
 
     // the following parameters are for GAM
     public int[] _k; // array storing number of knots per basis function
+    public double[][] _knots;// store knots for each gam column specified in _gam_X
     public String[] _gam_X; // array storing which predictor columns are needed
     public BSType[] _bs; // array storing basis functions, only support cr for now
     public double[] _scale;  // array storing scaling values to control wriggliness of fit

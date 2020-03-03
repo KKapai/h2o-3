@@ -122,7 +122,7 @@ public class LinearAlgebraUtils {
           ;
           tempDiag[i] = (hjIndex+hjIndexP1)*oneO3;
           if (i > 0)
-            tempDiag[i-1] = hjIndexP1*oneO6;
+            tempDiag[i-1] = hjIndex*oneO6;
           lowDiag[i] = Arrays.copyOf(tempDiag, rowSize);
         }
       };

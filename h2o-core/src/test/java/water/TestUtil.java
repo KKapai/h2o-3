@@ -1034,7 +1034,8 @@ public class TestUtil extends Iced {
               }
             } else {
               double d0 = c0.atd(rows), d1 = c1.atd(rows);
-              if (!(Math.abs(d0 - d1) <= Math.abs(d0 + d1) * _epsilon)) {
+              double cmpValue = ((d0==0.0) || (d1==0.0))?1.0:Math.abs(d0) + Math.abs(d1);
+              if (!(Math.abs(d0 - d1) <= cmpValue * _epsilon)) {
                 _unequal = true;
                 _message = msgBase + " d0 " + d0 + " != d1 " + d1;
                 return;

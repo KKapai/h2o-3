@@ -15,6 +15,7 @@ import water.Scope;
 import water.exceptions.H2OModelBuilderIllegalArgumentException;
 import water.fvec.Frame;
 import water.fvec.Vec;
+import water.util.ArrayUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,9 +78,34 @@ public class GAM extends ModelBuilder<GAMModel, GAMModel.GAMParameters, GAMModel
         int numKnots = _train.numRows() < 10 ? (int) _train.numRows() : 10;
         _parms._k = new int[_parms._gam_X.length];  // different columns may have different 
         Arrays.fill(_parms._k, numKnots);
+      } else {  // user specified number of knots.  Check to make sure it does not exceed the number of rows we have
+        int cindex=0;
+        for (int numKnots:_parms._k) {
+          long eligibleRows = _train.numRows()-_parms.train().vec(_parms._gam_X[cindex]).naCnt();
+          if (numKnots > eligibleRows) {
+            error("_k", " number of knots specified in _k: "+_parms._k[cindex]+" exceed number " +
+                    "of rows in training frame minus NA rows: "+eligibleRows+".  Reduce _k.");
+          }
+          cindex++;
+        }
       }
-      if ((_parms._saveGamCols || _parms._saveZMatrix) && ((_train.numCols() - 1 + _parms._k.length) < 2))
-        error("_saveGamCols/_saveZMatrix", "can only be enabled if we number of predictors plus" +
+      if (_parms._k.length != _parms._gam_X.length)
+        error("gam colum number","Number of gam columns implied from _k and _gam_X do not match.");
+      if (_parms._knots != null) {
+        int numGamCols = _parms._k.length;
+        if (numGamCols != _parms._knots.length)
+          error("gam colum number","Number of gam columns implied from _k and _knots do not match.");
+        for (int cind=0; cind<numGamCols; cind++) {
+          if (_parms._k[cind] != _parms._knots[cind].length)
+            error("knots number", "Number of knots specified in _knots does not match the number of" +
+                    " knots specified in _k");
+          double[] knotDiff = ArrayUtils.eleDiff(_parms._knots[cind]);
+          if (ArrayUtils.minValue(knotDiff) < 0) 
+            error("knots", "_knots must be sorted in increasing order");
+        }
+      }
+      if ( _parms._saveZMatrix && ((_train.numCols() - 1 + _parms._k.length) < 2))
+        error("_saveZMatrix", "can only be enabled if we number of predictors plus" +
                 " Gam columns in _gamX exceeds 2");
       if ((_parms._lambda_search || !_parms._intercept || _parms._lambda == null || _parms._lambda[0] > 0)) 
         _parms._use_all_factor_levels = true;
@@ -109,7 +135,7 @@ public class GAM extends ModelBuilder<GAMModel, GAMModel.GAMParameters, GAMModel
   }
 
   private class GAMDriver extends Driver {
-    boolean _centerGAM = false; // true if we need to constraint GAM columns
+    boolean _centerGAM = true; // copy R: set to true.  Will consider setting to false in future
     double[][][] _zTranspose; // store for each GAM predictor transpose(Z) matrix
     double[][][] _penalty_mat;  // store for each GAM predictir the penalty matrix
     public double[][][] _binvD; // store BinvD for each gam column specified for scoring
@@ -131,13 +157,12 @@ public class GAM extends ModelBuilder<GAMModel, GAMModel.GAMParameters, GAMModel
      */
     Frame adaptTrain() {
       int numGamFrame = _parms._gam_X.length;
-      _centerGAM = (numGamFrame > 1) || (_train.numCols() - 1 + numGamFrame) >= 2;
       _zTranspose = _centerGAM ? GamUtils.allocate3DArray(numGamFrame, _parms, 0) : null;
       _penalty_mat = _centerGAM ? GamUtils.allocate3DArray(numGamFrame, _parms, 2) :
               GamUtils.allocate3DArray(numGamFrame, _parms, 1);
       _binvD = GamUtils.allocate3DArray(numGamFrame, _parms, 3);
       _numKnots = MemoryManager.malloc4(numGamFrame);
-      _knots = new double[numGamFrame][];
+      _knots = _parms._knots==null?new double[numGamFrame][]:_parms._knots;
       _gamColNames = new String[numGamFrame][];
       _gamColNamesCenter = new String[numGamFrame][];
       _gamFrameKeys = new Key[numGamFrame];
@@ -165,8 +190,6 @@ public class GAM extends ModelBuilder<GAMModel, GAMModel.GAMParameters, GAMModel
       Frame newTFrame=null, gamColsFrame=null, gamColsFrameCenter=null;
       try {
         _job.update(0, "Adding GAM columns to training dataset...");
-        int trainCols = _train.numCols();  // number of columns before adding GAM columns
-        String[] trainColNames = _train.names(); // column names before adding GAM columns
         Frame newTrain = rebalance(adaptTrain(), false, _result+".temporary.train"); // add and store gam cols without centering
         dinfo = new DataInfo(newTrain.clone(), _valid, 1, _parms._use_all_factor_levels || _parms._lambda_search, DataInfo.TransformType.NONE, DataInfo.TransformType.NONE,
                 _parms.missingValuesHandling() == GLMParameters.MissingValuesHandling.Skip,
@@ -206,16 +229,15 @@ public class GAM extends ModelBuilder<GAMModel, GAMModel.GAMParameters, GAMModel
         List<Key<Vec>> keep = new ArrayList<>();
         if (model != null) {
           if (_parms._saveGamCols) {
-            addFrameKeys2Keep(newTFrame._key, keep);
-            addFrameKeys2Keep(model._output._gamTransformedTrain, keep);
+            addFrameKeys2Keep(keep, newTFrame._key, model._output._gamTransformedTrain);
             if (_centerGAM)
-              addFrameKeys2Keep(model._output._gamTransformedTrainCenter, keep);
+              addFrameKeys2Keep(keep, model._output._gamTransformedTrainCenter);
           }
           model.unlock(_job);
+          Scope.untrack(keep);  // leave the vectors alone.
         }
         if (dinfo!=null)
           dinfo.remove();
-        Scope.untrack(keep);  // leave the vectors alone.
       }
     }
     

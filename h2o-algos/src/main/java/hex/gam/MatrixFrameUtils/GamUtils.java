@@ -64,22 +64,6 @@ public class GamUtils {
     }
   }
 
-  /***
-   * from Stack overflow by dfa/user1079877
-   * @param fields
-   * @param type
-   * @return
-   */
-  public static List<Field> getAllFields(List<Field> fields, Class<?> type) {
-    fields.addAll(Arrays.asList(type.getDeclaredFields()));
-
-    if (type.getSuperclass() != null) {
-      getAllFields(fields, type.getSuperclass());
-    }
-
-    return fields;
-  }
-
   public static GLMParameters copyGAMParams2GLMParams(GAMParameters parms, Frame trainData) {
     GLMParameters glmParam = new GLMParameters();
     Field[] field1 = GAMParameters.class.getDeclaredFields();
@@ -215,6 +199,7 @@ public class GamUtils {
                                    boolean modelBuilding, boolean centerGAM, Key<Frame>[] gamFrameKeys, 
                                    Key<Frame>[] gamFrameKeysCenter, double[][][] binvD, int[] numKnotsMat, double[][] knotsMat) {
     int numGamFrame = parms._gam_X.length;
+    boolean nullKnots = knotsMat == null;
     RecursiveAction[] generateGamColumn = new RecursiveAction[numGamFrame];
     for (int index = 0; index < numGamFrame; index++) {
       final Frame predictVec = new Frame(new String[]{parms._gam_X[index]}, new Vec[]{orig.vec(parms._gam_X[index])});  // extract the vector to work on
@@ -229,13 +214,15 @@ public class GamUtils {
       }
       gamColnames[frameIndex] = new String[numKnots];
       gamColnamesCenter[frameIndex] = new String[numKnotsM1];
-      knotsMat[frameIndex] = new double[numKnots];
+      if (nullKnots)
+        knotsMat[frameIndex] = new double[numKnots];
       System.arraycopy(newColNames, 0, gamColnames[frameIndex], 0, numKnots);
       generateGamColumn[frameIndex] = new RecursiveAction() {
         @Override
         protected void compute() {
-          GenerateGamMatrixOneColumn genOneGamCol = new GenerateGamMatrixOneColumn(splineType, numKnots, null, predictVec,
-                  parms._standardize, centerGAM, scale).doAll(numKnots, Vec.T_NUM, predictVec);
+          GenerateGamMatrixOneColumn genOneGamCol = new GenerateGamMatrixOneColumn(splineType, numKnots, 
+                  nullKnots?null:knotsMat[frameIndex], predictVec, parms._standardize, centerGAM, 
+                  scale).doAll(numKnots, Vec.T_NUM, predictVec);
           Frame oneAugmentedColumn = genOneGamCol.outputFrame(Key.make(), newColNames,
                   null);
           gamFrameKeys[frameIndex] = oneAugmentedColumn._key;
@@ -244,7 +231,7 @@ public class GamUtils {
             if (centerGAM) {  // calculate z transpose
               Frame oneAugmentedColumnCenter = genOneGamCol.outputFrame(Key.make(), newColNames,
                       null);
-              oneAugmentedColumnCenter = genOneGamCol.de_centralize_frame(oneAugmentedColumnCenter,
+              oneAugmentedColumnCenter = genOneGamCol.deCentralizeFrame(oneAugmentedColumnCenter,
                       predictVec.name(0) + "_" + splineType.toString() + "_decenter_", parms);
               GamUtils.copy2DArray(genOneGamCol._ZTransp, zTranspose[frameIndex]); // copy transpose(Z)
               double[][] transformedPenalty = ArrayUtils.multArrArr(ArrayUtils.multArrArr(genOneGamCol._ZTransp,
@@ -259,7 +246,8 @@ public class GamUtils {
               GamUtils.copy2DArray(genOneGamCol._penaltyMat, penalty_mat[frameIndex]); // copy penalty matrix
             GamUtils.copy2DArray(genOneGamCol._bInvD, binvD[frameIndex]);
             numKnotsMat[frameIndex] = genOneGamCol._numKnots;
-            System.arraycopy(genOneGamCol._knots, 0, knotsMat[frameIndex], 0, numKnots);
+            if (nullKnots)  // only copy if knots are not specified
+              System.arraycopy(genOneGamCol._knots, 0, knotsMat[frameIndex], 0, numKnots);
           }
         }
       };
@@ -319,9 +307,11 @@ public class GamUtils {
     return gamFrameCenter;
   }
   
-  public static void addFrameKeys2Keep(Key<Frame> keyNames, List<Key<Vec>> keep) {
-      Frame loadingFrm = DKV.getGet(keyNames);
-      if (loadingFrm != null) for (Vec vec : loadingFrm.vecs()) keep.add(vec._key);
+  public static void addFrameKeys2Keep(List<Key<Vec>> keep, Key<Frame> ... keyNames) {
+      for (Key<Frame> keyName:keyNames) {
+        Frame loadingFrm = DKV.getGet(keyName);
+        if (loadingFrm != null) for (Vec vec : loadingFrm.vecs()) keep.add(vec._key);
+      }
   }
   
   public static Frame saveGAMFrames(Frame fr) {
@@ -331,13 +321,5 @@ public class GamUtils {
       xvecs[i] = fr.vec(i);
     }
     return new Frame(Key.make(), fr.names(), xvecs);
-  }
-  
-  public static void cleanUpFrames(Frame[] delFrames) {
-    int numFrames = delFrames.length;
-    for (int fInd=0; fInd < numFrames; fInd++) {
-      if (delFrames[fInd]!=null)
-        delFrames[fInd].delete();
-    }
   }
 }

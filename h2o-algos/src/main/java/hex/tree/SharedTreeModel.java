@@ -638,6 +638,7 @@ public abstract class SharedTreeModel<
     switch (_parms._categorical_encoding) {
       case AUTO:
       case Enum:
+      case SortByResponse:
         return CategoricalEncoding.AUTO;
       case OneHotExplicit:
         return CategoricalEncoding.OneHotExplicit;
@@ -649,7 +650,7 @@ public abstract class SharedTreeModel<
   @Override protected SBPrintStream toJavaInit(SBPrintStream sb, CodeGeneratorPipeline fileCtx) {
     CategoricalEncoding encoding = getGenModelEncoding();
     if (encoding == null) {
-      throw new IllegalArgumentException("Only default and 1-hot explicit scheme is supported for POJO/MOJO");
+      throw new IllegalArgumentException("Only default, SortByResponse and 1-hot explicit scheme is supported for POJO/MOJO");
     }
     sb.nl();
     sb.ip("public boolean isSupervised() { return true; }").nl();

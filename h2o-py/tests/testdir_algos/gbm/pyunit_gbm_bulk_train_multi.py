@@ -17,7 +17,7 @@ def test_gbm_bulk_train_multi():
     }
     titanic_gbm = H2OGradientBoostingEstimator(**params)
     models = titanic_gbm.bulk_train(y=response, ignored_columns=["name"], training_frame=titanic,
-                                    segment_columns=segment_columns)
+                                    segments=segment_columns)
     models_list = models.as_frame().sort(by=segment_columns)
 
     assert models_list.names == [u'pclass', u'sex', u'Status', u'Model', u'Errors', u'Warnings']

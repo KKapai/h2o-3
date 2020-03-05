@@ -114,27 +114,63 @@ class H2OEstimator(ModelBase):
                                  ignored_columns=ignored_columns, model_id=model_id, verbose=verbose)
         self._train(parms, verbose=verbose)
 
-
     def bulk_train(self, x=None, y=None, training_frame=None, offset_column=None, fold_column=None,
                    weights_column=None, validation_frame=None, max_runtime_secs=None, ignored_columns=None,
-                   segment_columns=None, segments=None, verbose=False):
-        assert_is_type(segment_columns, None, [str])
-        assert_is_type(segments, None, H2OFrame)
+                   segments=None, verbose=False):
+        """
+        Trains H2O model for each segment of the training dataset.
+
+        :param x: A list of column names or indices indicating the predictor columns.
+        :param y: An index or a column name indicating the response column.
+        :param H2OFrame training_frame: The H2OFrame having the columns indicated by x and y (as well as any
+            additional columns specified by fold, offset, and weights).
+        :param offset_column: The name or index of the column in training_frame that holds the offsets.
+        :param fold_column: The name or index of the column in training_frame that holds the per-row fold
+            assignments.
+        :param weights_column: The name or index of the column in training_frame that holds the per-row weights.
+        :param validation_frame: H2OFrame with validation data to be scored on while training.
+        :param float max_runtime_secs: Maximum allowed runtime in seconds for each model training. Use 0 to disable.
+            Please note that regardless of how this parameter is set, a model will be built for each input segment.
+            This parameter only affects individual model training.
+        :param segments: A list of columns to segment-by. H2O will group the training (and validation) dataset
+            by the segment-by columns and train a separate model for each segment (group of rows).
+            As an alternative to providing a list of columns, users can also supply an explicit enumeration of
+            segments to build the models for. This enumeration needs to be represented as H2OFrame.          
+        :param bool verbose: Enable to print additional information during model building. Defaults to False.
+
+        :examples:
+
+        >>> response = "survived"
+        >>> titanic = h2o.import_file("https://s3.amazonaws.com/h2o-public-test-data/smalldata/gbm_test/titanic.csv")
+        >>> titanic[response] = titanic[response].asfactor()
+        >>> predictors = ["survived","name","sex","age","sibsp","parch","ticket","fare","cabin"]
+        >>> train, valid = titanic.split_frame(ratios=[.8], seed=1234)
+        >>> from h2o.estimators.gbm import H2OGradientBoostingEstimator
+        >>> titanic_gbm = H2OGradientBoostingEstimator(seed=1234)
+        >>> titanic_models = titanic_gbm.bulk_train(segments=["pclass"],
+        ...                                         x=predictors,
+        ...                                         y=response,
+        ...                                         training_frame=train,
+        ...                                         validation_frame=valid)
+        >>> titanic_models.as_frame()
+        """
+        assert_is_type(segments, None, H2OFrame, [str])
         assert_is_type(verbose, bool)
 
-        if not segment_columns and not segments:
-            raise H2OValueError("Parameters segment_columns and segments were not specified. "
-                                "You need to specify at least one of them.")
+        if not segments:
+            raise H2OValueError("Parameter segments was not specified. Please provide either a list of columns to "
+                                "segment-by or an explicit list of segments to build models for.")
 
         parms = self._make_parms(x=x, y=y, training_frame=training_frame, offset_column=offset_column,
                                  fold_column=fold_column, weights_column=weights_column,
                                  validation_frame=validation_frame, max_runtime_secs=max_runtime_secs,
                                  ignored_columns=ignored_columns, model_id=None, verbose=verbose)
-        if segment_columns:
-            parms["segment_columns"] = segment_columns
-        if segments:
-            parms["segments"] = H2OEstimator._keyify_if_h2oframe(segments)
 
+        if isinstance(segments, H2OFrame):
+            parms["segments"] = H2OEstimator._keyify_if_h2oframe(segments)
+        else:
+            parms["segment_columns"] = segments
+        
         rest_ver = self._get_rest_version(parms)
         bulk_train_response = h2o.api("POST /%d/BulkModelBuilders/%s" % (rest_ver, self.algo), data=parms)
         job = H2OJob(bulk_train_response, job_type=(self.algo + " Bulk Model Build"))

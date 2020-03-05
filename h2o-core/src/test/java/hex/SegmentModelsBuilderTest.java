@@ -34,8 +34,10 @@ public class SegmentModelsBuilderTest {
       parms._action = new GetSegment();
       parms._train = fr._key;
       parms._response_column = "sepal_wid";
-      
-      SegmentModels segmentModels = new SegmentModelsBuilder(Key.make(), parms, segments).buildSegmentModels().get();
+
+      SegmentModelsBuilder.SegmentModelsParameters smParms = new SegmentModelsBuilder.SegmentModelsParameters();
+      smParms._segments = segments._key;
+      SegmentModels segmentModels = new SegmentModelsBuilder(Key.make(), smParms, parms).buildSegmentModels().get();
       Scope.track_generic(segmentModels);
 
       Frame smFrame = segmentModels.toFrame();

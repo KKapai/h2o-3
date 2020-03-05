@@ -5,6 +5,8 @@ H2O Segment Models.
 :copyright: (c) 2020 H2O.ai
 :license:   Apache License Version 2.0 (see LICENSE for details)
 """
+from __future__ import absolute_import
+
 from h2o.base import Keyed
 from h2o.frame import H2OFrame
 from h2o.expr import ExprNode

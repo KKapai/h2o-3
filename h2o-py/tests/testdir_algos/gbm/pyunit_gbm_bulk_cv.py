@@ -4,7 +4,8 @@ import h2o
 from tests import pyunit_utils
 from h2o.estimators.gbm import H2OGradientBoostingEstimator
 
-# 
+
+# test bulk model building with CV and also providing a validation frame 
 def test_gbm_bulk_cv():
     response = "survived"
     titanic = h2o.import_file(path=pyunit_utils.locate("smalldata/gbm_test/titanic.csv"))
@@ -17,7 +18,20 @@ def test_gbm_bulk_cv():
                                             y=response,
                                             training_frame=train,
                                             validation_frame=valid)
-    print(titanic_models.as_frame()) # FIXME: do some actual checking
+    train_cl1 = train[train["pclass"] == 1]
+    valid_cl1 = valid[valid["pclass"] == 1]
+
+    titanic_cl1_gbm = H2OGradientBoostingEstimator(seed=1234, nfolds=2)
+    titanic_cl1_gbm.train(x=predictors,
+                          y=response,
+                          training_frame=train_cl1,
+                          validation_frame=valid_cl1)
+
+    bulk_models = titanic_models.as_frame()
+    titanic_bulk_cl1_gbm_id = bulk_models[bulk_models["pclass"] == 1]["Model"]
+    titanic_bulk_cl1_gbm = h2o.get_model(titanic_bulk_cl1_gbm_id.flatten())
+
+    pyunit_utils.check_models(titanic_cl1_gbm, titanic_bulk_cl1_gbm, use_cross_validation=True)
 
 
 if __name__ == "__main__":

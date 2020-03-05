@@ -17,7 +17,6 @@ from h2o.job import H2OJob
 from h2o.utils.compatibility import *  # NOQA
 from h2o.utils.shared_utils import quoted
 from h2o.utils.typechecks import assert_is_type, is_type, numeric, FunctionType
-from h2o.segment_models import H2OSegmentModels
 from ..model.autoencoder import H2OAutoEncoderModel
 from ..model.binomial import H2OBinomialModel
 from ..model.clustering import H2OClusteringModel
@@ -33,6 +32,7 @@ from ..model.regression import H2ORegressionModel
 from ..model.word_embedding import H2OWordEmbeddingModel
 from ..model.anomaly_detection import H2OAnomalyDetectionModel
 from ..model.coxph import H2OCoxPHModel
+from ..model.segment_models import H2OSegmentModels
 
 
 class EstimatorAttributeError(AttributeError):
